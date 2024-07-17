@@ -110,8 +110,12 @@ static int parsing_error(sdp_parser_t *p, char const *fmt, ...);
 /** Parse an SDP message.
  *
  * The function sdp_parse() parses an SDP message @a msg of size @a
- * msgsize. Parsing is done according to the given @a flags. The SDP message
- * may not contain a NUL.
+ * msgsize. If msgsize is -1, the size of message is calculated using
+ * strlen().
+ *
+ * Parsing is done according to the given @a flags.
+ *
+ * The SDP message may not contain a NUL.
  *
  * The parsing result is stored to an #sdp_session_t structure.
  *
@@ -147,7 +151,7 @@ sdp_parse(su_home_t *home, char const msg[], issize_t msgsize, int flags)
   char *b;
   size_t len;
 
-  if (msgsize == -1 || msg == NULL) {
+  if (msg == NULL) {
     p = su_home_clone(home, sizeof(*p));
     if (p)
       parsing_error(p, "invalid input message");
@@ -156,7 +160,7 @@ sdp_parse(su_home_t *home, char const msg[], issize_t msgsize, int flags)
     return p;
   }
 
-  if (msgsize == -1 && msg)
+  if (msgsize == -1)
     len = strlen(msg);
   else
     len = msgsize;
@@ -395,6 +399,10 @@ static void parse_message(sdp_parser_t *p)
        record && p->pr_ok;
        record = next(&message, CRLF, strip)) {
     field = record[0];
+
+    if (strlen(record) < 2) {
+      return;
+    }
 
     rest = record + 2; rest += strspn(rest, strip);
 
@@ -699,7 +707,7 @@ static void parse_information(sdp_parser_t *p, char *r, sdp_text_t **result)
   /*
    information-field =   ["i=" text CRLF]
    */
-  *result = r;
+  if (result) *result = r;
 }
 
 /* -------------------------------------------------------------------------
@@ -926,6 +934,10 @@ static void parse_bandwidth(sdp_parser_t *p, char *r, sdp_bandwidth_t **result)
     modifier = sdp_bw_tias, name = "TIAS";
   else if (su_casematch(name, "AS") == 1)
     modifier = sdp_bw_as, name = "AS";
+  else if (su_casematch(name, "RS") == 1)
+    modifier = sdp_bw_rs, name = "RS";
+  else if (su_casematch(name, "RR") == 1)
+    modifier = sdp_bw_rr, name = "RR";
   else
 	modifier = sdp_bw_x, name = "BW-X";
 
@@ -1164,7 +1176,7 @@ static void parse_key(sdp_parser_t *p, char *r, sdp_key_t **result)
 
   {
     PARSE_ALLOC(p, sdp_key_t, k);
-    *result = k;
+    if (result) *result = k;
 
     /* These are defined as key-sensitive in RFC 4566 */
 #define MATCH(s, tok) \
@@ -1352,6 +1364,10 @@ static void parse_media(sdp_parser_t *p, char *r, sdp_media_t **result)
       PARSE_ALLOC(p, sdp_list_t, l);
       *fmt = l;
       l->l_text = token(&r, SPACE TAB, TOKEN, SPACE TAB);
+      if (!l->l_text) {
+         parsing_error(p, "m= invalid");
+         return;
+      }
       fmt = &l->l_next;
     }
   }
@@ -1755,6 +1771,10 @@ static void parse_descs(sdp_parser_t *p,
        record = next(&message, CRLF, strip)) {
     char field = record[0];
 
+    if (strlen(record) < 2) {
+      return;
+    }
+
     rest = record + 2; rest += strspn(rest, strip);
 
     if (record[1] == '=') switch (field) {
@@ -1770,6 +1790,10 @@ static void parse_descs(sdp_parser_t *p,
       bandwidths = &(*bandwidths)->b_next;
       break;
 
+    case 'i': 
+      parse_information(p, rest, &m->m_information);
+      break;
+     
     case 'k':
       parse_key(p, rest, &m->m_key);
       break;

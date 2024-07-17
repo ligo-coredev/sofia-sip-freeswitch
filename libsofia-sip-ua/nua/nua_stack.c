@@ -209,10 +209,40 @@ int nua_stack_init(su_root_t *root, nua_t *nua)
 
 void nua_stack_deinit(su_root_t *root, nua_t *nua)
 {
+  nua_handle_t *nh, *nh_next;
+
   enter;
+
+  su_task_deinit(nua->nua_server);
+  su_task_deinit(nua->nua_client);
 
   su_timer_destroy(nua->nua_timer), nua->nua_timer = NULL;
   nta_agent_destroy(nua->nua_nta), nua->nua_nta = NULL;
+
+  for (nh = nua->nua_handles; nh; nh = nh_next) {
+    nh_next = nh->nh_next;
+
+    if (nh->nh_soa) {
+      soa_destroy(nh->nh_soa), nh->nh_soa = NULL;
+    }
+
+    /* Cleanup remaining nua handles as they are su_home_new'ed and not su_home_cloned (do not belong to the nua's home)
+       See nh_create_handle().
+       At least one handle will be found here and it is nua default handle
+       which is su_home_cloned (see nua_stack_init()) and therefore does not actually require to be unrefed.
+       Nua is about to die so we don't remove nh from nua, just unref nh */
+    if (nh != nua->nua_handles) {
+      su_home_t *nh_home = (su_home_t *)nh;
+
+      SU_DEBUG_9(("nua(%p): found handle with refcount = "MOD_ZU". Destroying.\n", (void *)nh, su_home_refcount(nh_home)));
+      while(!su_home_unref(nh_home));
+    }
+  }
+
+#if HAVE_SMIME		/* Start NRC Boston */
+  sm_destroy(nua->sm);
+#endif			/* End NRC Boston */
+
 }
 
 /* ----------------------------------------------------------------------
@@ -376,8 +406,8 @@ void nua_application_event(nua_t *dummy, su_msg_r sumsg, nua_ee_data_t *ee)
       char const *name = nua_event_name((enum nua_event_e)e->e_event) + 4;
       SU_DEBUG_7(("nua(%p): event %s dropped\n", (void *)nh, name));
     }
-    nua_handle_unref(nh);
-    nua_stack_unref(nua);
+    if (nh) nua_handle_unref_user(nh);
+    if (nua) nua_unref_user(nua);
     return;
   }
 
@@ -402,8 +432,8 @@ void nua_application_event(nua_t *dummy, su_msg_r sumsg, nua_ee_data_t *ee)
     nua->nua_current = frame->nf_next;
   }
 
-  nua_handle_unref(nh);
-  nua_stack_unref(nua);
+  if (nh) nua_handle_unref_user(nh);
+  if (nua) nua_unref_user(nua);
 }
 
 /** Get current request message. @NEW_1_12_4.
@@ -492,7 +522,7 @@ int nua_signal(nua_t *nua, nua_handle_t *nh, msg_t *msg,
   if (nua == NULL)
     return -1;
 
-  if (nua->nua_shutdown_started && event != nua_r_shutdown)
+  if (nua->nua_shutdown_started && event != nua_r_shutdown && event != nua_r_destroy && event != nua_r_handle_unref && event != nua_r_unref)
     return -1;
 
   ta_start(ta, tag, value);
@@ -514,7 +544,7 @@ int nua_signal(nua_t *nua, nua_handle_t *nh, msg_t *msg,
 
     assert(tend == t); (void)tend; assert(b == bend); (void)bend;
 
-    e->e_always = event == nua_r_destroy || event == nua_r_shutdown;
+    e->e_always = event == nua_r_destroy || event == nua_r_shutdown || event == nua_r_handle_unref || event == nua_r_unref;
     e->e_event = event;
     e->e_nh = nh ? nua_handle_ref(nh) : NULL;
     e->e_status = status;
@@ -549,10 +579,10 @@ void nua_stack_signal(nua_t *nua, su_msg_r msg, nua_ee_data_t *ee)
   nua_event_data_t *e = ee->ee_data;
   nua_handle_t *nh = e->e_nh;
   tagi_t *tags = e->e_tags;
-  nua_event_t event;
+  nua_event_t event = (enum nua_event_e)e->e_event;
   int error = 0;
 
-  if (nh) {
+  if (nh && !nh->nh_destroyed && event != nua_r_handle_unref) {
     if (!nh->nh_prev)
       nh_append(nua, nh);
     if (!nh->nh_ref_by_stack) {
@@ -574,8 +604,6 @@ void nua_stack_signal(nua_t *nua, su_msg_r msg, nua_ee_data_t *ee)
   }
 
   su_msg_save(nua->nua_signal, msg);
-
-  event = (enum nua_event_e)e->e_event;
 
   if (nua->nua_shutdown && !e->e_always) {
     /* Shutting down */
@@ -662,6 +690,15 @@ void nua_stack_signal(nua_t *nua, su_msg_r msg, nua_ee_data_t *ee)
 		  su_msg_destroy(nua->nua_signal);
 	  }
     return;
+  case nua_r_unref:
+    nua_unref(nua);
+    break;
+  case nua_r_handle_unref:
+    nua_handle_unref(nh);
+    break;
+  case nua_r_nta_agent_resolver_clean_dns_cache:
+    nta_agent_resolver_clean_cache(nua->nua_nta);
+    break;
   default:
     break;
   }

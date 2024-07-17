@@ -1,6 +1,8 @@
 #ifndef _WS_H
 #define _WS_H
 
+#include "tport_internal.h"
+
 //#define WSS_STANDALONE 1
 
 #define WEBSOCKET_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -24,6 +26,7 @@
 #include <errno.h>
 //#include "sha1.h"
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 
 #if defined(_MSC_VER) || defined(__APPLE__) || defined(__FreeBSD__) || (defined(__SVR4) && defined(__sun)) 
 #define __bswap_64(x) \
@@ -112,8 +115,11 @@ typedef struct wsh_s {
 	int logical_established;
 	int stay_open;
 	int x;
+	int ssl_io_error;
 	void *write_buffer;
 	size_t write_buffer_len;
+
+	ssize_t payload_size_max;
 } wsh_t;
 
 ssize_t ws_send_buf(wsh_t *wsh, ws_opcode_t oc);
@@ -124,6 +130,7 @@ ssize_t ws_raw_read(wsh_t *wsh, void *data, size_t bytes, int block);
 ssize_t ws_raw_write(wsh_t *wsh, void *data, size_t bytes);
 ssize_t ws_read_frame(wsh_t *wsh, ws_opcode_t *oc, uint8_t **data);
 ssize_t ws_write_frame(wsh_t *wsh, ws_opcode_t oc, void *data, size_t bytes);
+void ws_set_global_payload_size_max(ssize_t bytes);
 int ws_init(wsh_t *wsh, ws_socket_t sock, SSL_CTX *ssl_ctx, int close_sock, int block, int stay_open);
 ssize_t ws_close(wsh_t *wsh, int16_t reason);
 void ws_destroy(wsh_t *wsh);
@@ -131,6 +138,7 @@ void init_ssl(void);
 void deinit_ssl(void);
 int xp_errno(void);
 int xp_is_blocking(int errcode);
+void wss_log_errors(unsigned level, char const *s, unsigned long e);
 
 
 

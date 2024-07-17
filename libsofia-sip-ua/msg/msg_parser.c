@@ -564,7 +564,6 @@ isize_t msg_recv_commit(msg_t *msg, usize_t n, int eos)
 msg_t *msg_next(msg_t *msg)
 {
   msg_t *next;
-  usize_t n;
 
   if (msg && msg->m_next) {
     next = msg->m_next;
@@ -572,7 +571,7 @@ msg_t *msg_next(msg_t *msg)
     return next;
   }
 
-  if ((n = msg_buf_committed(msg))) {
+  if (msg_buf_committed(msg)) {
     if (msg_buf_move(next = msg_create(msg->m_class, msg->m_oflags), msg)) {
       msg_addr_copy(next, msg);
       return next;
@@ -1662,7 +1661,7 @@ size_t msg_header_prepare(msg_mclass_t const *mc, int flags,
   hc = h->sh_class;
   compact = MSG_IS_COMPACT(flags);
   one_line_list = hc->hc_kind == msg_kind_apndlist;
-  comma_list = compact || one_line_list || MSG_IS_COMMA_LISTS(flags);
+  comma_list = (compact && MSG_KIND_IS_COMPACT(hc->hc_kind)) || one_line_list || MSG_IS_COMMA_LISTS(flags);  
 
   for (h0 = h, n = 0; ; h = next) {
     next = h->sh_succ;
@@ -1916,6 +1915,8 @@ int msg_serialize(msg_t *msg, msg_pub_t *pub)
     return errno = EINVAL, -1;
   if (pub == NULL)
     pub = msg->m_object;
+
+  assert(pub);
 
   /* There must be a first line */
   if (pub->msg_request)
@@ -2442,6 +2443,7 @@ int msg_header_prepend(msg_t *msg,
     old = (*hh);
     break;
   case msg_kind_append:
+  case msg_kind_non_compact_append:
   case msg_kind_apndlist:
   case msg_kind_prepend:
     for (end = h; end->sh_next; end = end->sh_next)

@@ -227,13 +227,8 @@ void nua_destroy(nua_t *nua)
 
     nua->nua_callback = NULL;
 
-    su_task_deinit(nua->nua_server);
-    su_task_deinit(nua->nua_client);
-
     su_clone_wait(nua->nua_api_root, nua->nua_clone);
-#if HAVE_SMIME		/* Start NRC Boston */
-    sm_destroy(nua->sm);
-#endif			/* End NRC Boston */
+
 	nua_unref(nua);
   }
 }
@@ -1025,6 +1020,12 @@ static int nua_stack_handle_by_replaces_call(void *arg)
   struct nua_stack_handle_by_replaces_args *a = arg;
 
   a->retval = nua_stack_handle_by_replaces(a->nua, a->r);
+  if (!NH_IS_VALID(a->retval) || NH_IS_DEFAULT(a->retval)) {
+    a->retval = NULL;
+    return 1;
+  }
+
+  nua_handle_ref(a->retval);
 
   return 0;
 }
@@ -1040,6 +1041,12 @@ static int nua_stack_handle_by_call_id_call(void *arg)
   struct nua_stack_handle_by_call_id_args *a = arg;
 
   a->retval = nua_stack_handle_by_call_id(a->nua, a->call_id);
+  if (!NH_IS_VALID(a->retval) || NH_IS_DEFAULT(a->retval)) {
+    a->retval = NULL;
+    return 1;
+  }
+  
+  nua_handle_ref(a->retval);
 
   return 0;
 }
@@ -1070,10 +1077,7 @@ nua_handle_t *nua_handle_by_replaces(nua_t *nua, sip_replaces_t const *r)
     if (su_task_execute(nua->nua_server,
 			nua_stack_handle_by_replaces_call, (void *)&a,
 			NULL) == 0) {
-      nua_handle_t *nh = a.retval;
-
-      if (nh && !NH_IS_DEFAULT(nh) && nh->nh_valid)
-	return nua_handle_ref(nh);
+       return a.retval;
     }
   }
   return NULL;
@@ -1105,10 +1109,7 @@ nua_handle_t *nua_handle_by_call_id(nua_t *nua, const char *call_id)
     if (su_task_execute(nua->nua_server,
 			nua_stack_handle_by_call_id_call, (void *)&a,
 			NULL) == 0) {
-      nua_handle_t *nh = a.retval;
-
-      if (nh && !NH_IS_DEFAULT(nh) && nh->nh_valid)
-	return nua_handle_ref(nh);
+       return a.retval;
     }
   }
   return NULL;
@@ -1122,7 +1123,7 @@ int nua_count_handles(nua_t *nua)
 /** Get leg from dialog. */
 const nta_leg_t *nua_get_dialog_state_leg(nua_handle_t *nh)
 {
-	if (nh && nh->nh_ds)
+	if (nh)
 		return nh->nh_ds->ds_leg;
 	else
 		return NULL;
@@ -1131,7 +1132,7 @@ const nta_leg_t *nua_get_dialog_state_leg(nua_handle_t *nh)
 /** Get su_home_t from nua handle. */
 su_home_t *nua_handle_get_home(nua_handle_t *nh)
 {
-	if (nh && nh->nh_home)
+	if (nh)
 		return nh->nh_home;
 	else
 		return NULL;
@@ -1140,7 +1141,7 @@ su_home_t *nua_handle_get_home(nua_handle_t *nh)
 /** Get su_home_t from nua. */
 su_home_t *nua_get_home(nua_t *nua)
 {
-	if (nua && nua->nua_home)
+	if (nua)
 		return nua->nua_home;
 	else
 		return NULL;
@@ -1171,7 +1172,26 @@ unsigned nua_handle_is_destroyed(nua_handle_t *nh)
 
 void nua_handle_dialog_usage_set_refresh_range(nua_handle_t *nh,
 	unsigned min, unsigned max) {
-	if (nh && nh->nh_ds && nh->nh_ds->ds_usage) {
+	if (nh && nh->nh_ds->ds_usage) {
 		nua_dialog_usage_set_refresh_range(nh->nh_ds->ds_usage, min, max);
 	}
+}
+
+void nua_unref_user(nua_t *nua)
+{
+	enter;
+	nua_signal(nua, NULL, NULL, nua_r_unref, 0, NULL, TAG_NULL());
+}
+
+void nua_nta_agent_resolver_clean_dns_cache_ex(nua_t *nua)
+{
+	enter;
+	nua_signal(nua, NULL, NULL, nua_r_nta_agent_resolver_clean_dns_cache, 0, NULL, TAG_NULL());
+}
+
+void nua_handle_unref_user(nua_handle_t *nh)
+{
+	assert(nh);
+	nh_enter;
+	nua_signal(nh->nh_nua, nh, NULL, nua_r_handle_unref, 0, NULL, TAG_NULL());
 }

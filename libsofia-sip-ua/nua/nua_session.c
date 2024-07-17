@@ -860,7 +860,6 @@ static int nua_invite_client_response(nua_client_request_t *cr,
 {
   nua_dialog_usage_t *du = cr->cr_usage;
   nua_session_usage_t *ss = nua_dialog_usage_private(du);
-  int uas;
 
   if (ss == NULL || sip == NULL) {
     /* Xyzzy */
@@ -871,7 +870,7 @@ static int nua_invite_client_response(nua_client_request_t *cr,
     if (session_timer_is_supported(ss->ss_timer))
       session_timer_store(ss->ss_timer, sip);
 
-    session_timer_set(ss, uas = 0);
+    session_timer_set(ss, 0);
   }
 
   return nua_session_client_response(cr, status, phrase, sip);
@@ -973,8 +972,8 @@ static int nua_session_client_response(nua_client_request_t *cr,
   else if (!session_get_description(sip, &sdp, &len))
     /* No SDP */;
   else if (cr->cr_answer_recv) {
-    if (cr->cr_answer_recv > status) {
-      LOG3("status is older than previous answer, ignoring");
+    if (status < 200 && cr->cr_answer_recv >= 200) {
+      LOG3("call already answered, ignoring provisional response");
       sdp = NULL;
       return 0;
     } else {
@@ -1402,7 +1401,7 @@ int nua_invite_client_ack(nua_client_request_t *cr, tagi_t const *tags)
 			NULL);
     }
     else if (!reason) {
-      status = 900, phrase = "Cannot send ACK";
+      status = 900;		/* Cannot send ACK */
       reason = "SIP;cause=500;text=\"Internal Error\"";
     }
 
@@ -2626,7 +2625,6 @@ int process_ack(nua_server_request_t *sr,
   nua_session_usage_t *ss = nua_dialog_usage_private(sr->sr_usage);
   msg_t *msg = nta_incoming_getrequest_ackcancel(irq);
   char const *recv = NULL;
-  int uas;
 
   if (ss == NULL)
     return 0;
@@ -2690,7 +2688,7 @@ int process_ack(nua_server_request_t *sr,
 
   nua_stack_event(nh->nh_nua, nh, msg, nua_i_ack, SIP_200_OK, NULL);
   signal_call_state_change(nh, ss, 200, "OK", nua_callstate_ready);
-  session_timer_set(ss, uas = 1);
+  session_timer_set(ss, 1);
 
   nua_server_request_destroy(sr);
 
@@ -3417,7 +3415,6 @@ static int nua_update_client_response(nua_client_request_t *cr,
   nua_handle_t *nh = cr->cr_owner;
   nua_dialog_usage_t *du = cr->cr_usage;
   nua_session_usage_t *ss = nua_dialog_usage_private(du);
-  int uas;
 
   assert(200 <= status);
 
@@ -3432,7 +3429,7 @@ static int nua_update_client_response(nua_client_request_t *cr,
 
       if (!sr && (!du->du_cr || !du->du_cr->cr_orq)) {
 	session_timer_store(ss->ss_timer, sip);
-	session_timer_set(ss, uas = 0);
+	session_timer_set(ss, 0);
       }
     }
   }
@@ -3645,7 +3642,6 @@ int nua_update_server_respond(nua_server_request_t *sr, tagi_t const *tags)
 
     if (session_timer_is_supported(ss->ss_timer)) {
       nua_server_request_t *sr0;
-      int uas;
 
       session_timer_add_headers(ss->ss_timer, 0, msg, sip, nh);
 
@@ -3654,7 +3650,7 @@ int nua_update_server_respond(nua_server_request_t *sr, tagi_t const *tags)
 	  break;
 
       if (!sr0 && (!sr->sr_usage->du_cr || !sr->sr_usage->du_cr->cr_orq))
-	session_timer_set(ss, uas = 1);
+	session_timer_set(ss, 1);
     }
   }
 
@@ -4430,6 +4426,8 @@ void session_timer_store(struct session_timer *t,
   sip_require_t const *require = sip->sip_require;
   sip_supported_t const *supported = sip->sip_supported;
   sip_session_expires_t const *x = sip->sip_session_expires;
+
+  assert(t);
 
   t->remote.require = require && sip_has_feature(require, "timer");
   t->remote.supported =

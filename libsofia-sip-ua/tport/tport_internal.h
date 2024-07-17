@@ -178,6 +178,7 @@ struct tport_s {
 
   su_time_t           tp_ktime;	        /**< Keepalive timer updated */
   su_time_t           tp_ptime;	        /**< Ping sent */
+  su_time_t           tp_ltime;	        /**< Logical Layer timer updated */
 
   tp_name_t           tp_name[1];	/**< Transport name.
 					 *
@@ -304,7 +305,8 @@ struct tport_master {
   char               *mr_dump;	/**< Filename for dumping received/sent data */
   /** SOCK to dump received and sent data */
   su_socket_t         mr_capt_sock;
-  char               *mr_capt_name;	/**< Servername for capturing received/sent data */  
+  char               *mr_capt_name;	/**< Servername for capturing received/sent data */
+  su_addrinfo_t      *mr_capt_src_addr;
   tport_primary_t    *mr_primaries;        /**< List of primary contacts */
   unsigned	      mr_prot_ver;	/* hep version */
   unsigned	      mr_agent_id;      /* agent version */

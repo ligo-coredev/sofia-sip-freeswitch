@@ -143,7 +143,8 @@ int time_d(char const **ss,
     return -1;
   *sec = 10 * s[0] + s[1] - 11 * '0'; s += 2;
   if (*s) {
-    if (!IS_LWS(*s)) return -1; skip_lws(&s);
+    if (!IS_LWS(*s)) return -1;
+    skip_lws(&s);
   }
   *ss = s;
   return 0;
@@ -248,7 +249,8 @@ issize_t msg_date_d(char const **ss, msg_time_t *date)
     /* actime-date =
        wkday SP month SP ( 2DIGIT | ( SP 1DIGIT )) SP time SP 4DIGIT */
     mon = month_d(s); skip_token(&s);
-    if (mon < 0 || !IS_LWS(*s)) return -1; s++;
+    if (mon < 0 || !IS_LWS(*s)) return -1;
+    s++;
     while (IS_LWS(*s)) s++;
     if (!is_digit(*s)) return -1;
     day = *s++ - '0'; if (is_digit(*s)) day = 10 * day + *s++ - '0';
@@ -294,7 +296,7 @@ issize_t msg_date_d(char const **ss, msg_time_t *date)
       (min + 60 *
 	   (hour + 24 *
 	    (day - 1 + mon * 30 + first_day_offset[mon] +
-	     (leap_year && mon > 2) + ydays)));
+	     (leap_year && mon > 1) + ydays)));
   }
   *ss = s;
 
@@ -355,7 +357,7 @@ issize_t msg_date_e(char b[], isize_t bsiz, msg_time_t http_date)
   while (day >= days_per_month) {
     day -= days_per_month;
     month++;
-    days_per_month = days_per_months[month] + (leap_year && month == 2);
+    days_per_month = days_per_months[month] + (leap_year && month == 1);
   }
 
   return snprintf(b, bsiz, "%s, %02ld %s %04ld %02ld:%02ld:%02ld GMT",

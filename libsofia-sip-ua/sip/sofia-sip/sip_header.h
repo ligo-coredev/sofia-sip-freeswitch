@@ -67,7 +67,7 @@ SOFIAPUBFUN void sip_cloned_parser_destroy(void);
 SOFIAPUBFUN void sip_destroy_mclass(msg_mclass_t *mclass);
 
 /** Restore default SIP parser to non-extended */
-SOFIAPUBFUN void sip_default_mclass_restore();
+SOFIAPUBFUN void sip_default_mclass_restore(void);
 
 SOFIAPUBFUN int sip_update_default_mclass(msg_mclass_t const *mclass);
 SOFIAPUBFUN msg_mclass_t *sip_extend_mclass(msg_mclass_t *input);
@@ -231,10 +231,6 @@ SOFIAPUBFUN sip_call_id_t *sip_call_id_create(su_home_t *home,
 
 /** Create a @CSeq header object.  */
 SOFIAPUBFUN sip_cseq_t *sip_cseq_create(su_home_t *, uint32_t seq,
-					unsigned method, char const *name);
-
-/** Create a @Identity header object.  */
-SOFIAPUBFUN sip_identity_t *sip_identity_create(su_home_t *, uint32_t seq,
 					unsigned method, char const *name);
 
 /** Create a @Contact header object. */
