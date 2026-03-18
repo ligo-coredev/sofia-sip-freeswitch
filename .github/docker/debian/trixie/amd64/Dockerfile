@@ -1,11 +1,11 @@
-ARG BUILDER_IMAGE=debian:bullseye-20240513
+ARG BUILDER_IMAGE=debian:trixie-20250520
 
 FROM ${BUILDER_IMAGE} AS builder
 
 ARG MAINTAINER_NAME="Andrey Volk"
 ARG MAINTAINER_EMAIL="andrey@signalwire.com"
 
-ARG CODENAME=bullseye
+ARG CODENAME=trixie
 ARG ARCH=amd64
 
 ARG BUILD_NUMBER=42
